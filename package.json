@@ -10,7 +10,7 @@
     "test:e2e": "cross-env NODE_ENV=test playwright test -c testing/config/playwright.config.js",
     "test": "npm run test:api",
     "test:all": "npm run test:api && npm run test:e2e",
-    "report:e2e": "playwright show-report testing/reports/playwright",
+    "report:e2e": "playwright show-report testing/reports/playwright"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
