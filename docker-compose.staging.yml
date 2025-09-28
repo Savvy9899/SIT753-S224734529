@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  app:
+    image: ${IMAGE}
+    ports:
+      - "5001:5001"
+    environment:
+      PORT: "5001"
+      NODE_ENV: "staging"
+      MONGODB_URI: ${MONGODB_URI}
+      JWT_SECRET: ${JWT_SECRET}
+    restart: unless-stopped
