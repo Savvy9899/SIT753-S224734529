@@ -1,0 +1,152 @@
+/*
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background-color: #f4f4f4;
+}
+
+h1 {
+  color: #333;
+  text-align: center;
+}
+
+.card {
+  background-color: white;
+  border-radius: 15px;
+  padding: 20px;
+  height: 568px;
+}
+
+.input-field input,
+.input-field select,
+.input-field textarea {
+  background-color: #ffffff;
+}
+
+.input-field input::placeholder,
+.input-field textarea::placeholder {
+  color: black !important;
+}
+
+.btn {
+  background-color: #0077ff !important;
+  border-radius: 10px;
+  padding: 0 75px;
+}
+
+.btn:hover {
+  background-color: #005cbf !important;
+}
+
+a {
+  display: block;
+  text-align: center;
+  margin-top: 10px;
+  color: #0077ff;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.input-field>label {
+    color: #000000;
+} */
+
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background-color: #f4f4f4;
+}
+
+h1 {
+  color: #333;
+  text-align: center;
+}
+
+.card {
+  background-color: white;
+  border-radius: 15px;
+  padding: 20px;
+  height: 568px;
+}
+
+.input-field input,
+.input-field select,
+.input-field textarea {
+  background-color: #ffffff;
+}
+
+.input-field input::placeholder,
+.input-field textarea::placeholder {
+  color: black !important;
+}
+
+.btn {
+  background-color: #0077ff !important;
+  border-radius: 10px;
+  padding: 0 75px;
+}
+
+.btn:hover {
+  background-color: #005cbf !important;
+}
+
+a {
+  display: block;
+  text-align: center;
+  margin-top: 10px;
+  color: #0077ff;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.input-field > label {
+  color: #000000;
+}
+
+/* New styles for job management section */
+.collection-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  min-height: 48px; /* Ensure consistent height */
+}
+
+.job-details {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 70%; /* Prevent text from pushing buttons */
+}
+
+.job-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px; /* Increased spacing for clarity */
+  margin-left: 10px; /* Slight offset from job details */
+}
+
+.btn-small {
+  padding: 0 12px; /* Adjusted padding for consistency */
+  font-size: 12px;
+  height: 28px; /* Slightly taller for better alignment */
+  line-height: 28px; /* Match height for vertical centering */
+  margin: 0; /* Remove any default margins */
+}
+
+.btn-small.red {
+  background-color: #ef5350 !important;
+}
+
+.btn-small.red:hover {
+  background-color: #e53935 !important;
+}
