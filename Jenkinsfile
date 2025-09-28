@@ -1,10 +1,10 @@
 pipeline {
   agent any
   options { timestamps() }
-
+  tools { nodejs 'Node20' } 
   environment {
     REGISTRY       = 'docker.io'
-    IMAGE_NAME     = 'yourdockerhubuser/your-app'
+    IMAGE_NAME     = 'yourdockerhubuser/sit753-app'
     IMAGE_TAG      = "${env.GIT_COMMIT}"
     STAGING_HOST   = 'staging.example.com'
     PROD_HOST      = 'prod.example.com'
