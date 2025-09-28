@@ -44,6 +44,8 @@ const { authenticate, authorize } = require("./middleware/authMiddleware");
 app.get("/courses/manage", authenticate, authorize("admin"), (req, res) => {
   res.sendFile(path.join(__dirname, "views", "courses.html"));
 });
+// // Health check endpoint
+// app.get('/health', (req,res)=>res.status(200).send('ok'));
 
 // API routes
 const userRoutes = require("./routes/userRoutes");
