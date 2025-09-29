@@ -25,13 +25,35 @@ pipeline {
   // }
 }
 
+    // stage('Build') {
+    //   steps {
+    //     sh '''
+    //       set -e
+    //       node -v || true
+    //       npm ci
+    //       npm run build || true
+    //       docker build -t $IMAGE_NAME:$IMAGE_TAG .
+    //     '''
+    //   }
+    // }
+    stage('Preflight') {
+      steps {
+        sh '''
+          set -e
+          pwd
+          ls -la
+          test -f Dockerfile || (echo "Missing Dockerfile at repo root"; exit 1)
+        '''
+      }
+    }
+
     stage('Build') {
       steps {
         sh '''
           set -e
-          node -v || true
+          node -v
           npm ci
-          npm run build || true
+          docker version
           docker build -t $IMAGE_NAME:$IMAGE_TAG .
         '''
       }
