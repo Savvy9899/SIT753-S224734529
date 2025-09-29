@@ -207,22 +207,36 @@ pipeline {
     // }
 
     // 8) DEPLOY (Staging)
-    stage('Push & Deploy to Staging') {
+    // stage('Push & Deploy to Staging') {
+    //   steps {
+    //     withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+    //       sh '''
+    //         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+    //         docker tag $IMAGE_NAME:$IMAGE_TAG $IMAGE_NAME:staging-$BUILD_NUMBER
+    //         docker push $IMAGE_NAME:$IMAGE_TAG
+    //         docker push $IMAGE_NAME:staging-$BUILD_NUMBER
+    //       '''
+    //     }
+    //     sshagent(credentials: ['staging-ssh']) {
+    //       sh '''
+    //         export IMAGE="$IMAGE_NAME:staging-$BUILD_NUMBER"
+    //         ssh -o StrictHostKeyChecking=no ubuntu@$STAGING_HOST "mkdir -p ~/app && echo IMAGE=$IMAGE > ~/app/.env"
+    //         scp -o StrictHostKeyChecking=no ${STAGING_COMPOSE} ubuntu@$STAGING_HOST:~/app/
+    //         ssh -o StrictHostKeyChecking=no ubuntu@$STAGING_HOST "cd ~/app && IMAGE=$IMAGE docker compose -f ${STAGING_COMPOSE} --env-file .env pull && IMAGE=$IMAGE docker compose -f ${STAGING_COMPOSE} --env-file .env up -d && curl -fsS http://localhost:5001/health"
+    //       '''
+    //     }
+    //   }
+    // }
+        stage('Push & Deploy to Staging') {
       steps {
-        withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+        withCredentials([usernamePassword(
+          credentialsId: 'dockerhub-creds',
+          usernameVariable: 'DOCKERHUB_USER',
+          passwordVariable: 'DOCKERHUB_PASS'
+        )]) {
           sh '''
-            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-            docker tag $IMAGE_NAME:$IMAGE_TAG $IMAGE_NAME:staging-$BUILD_NUMBER
-            docker push $IMAGE_NAME:$IMAGE_TAG
-            docker push $IMAGE_NAME:staging-$BUILD_NUMBER
-          '''
-        }
-        sshagent(credentials: ['staging-ssh']) {
-          sh '''
-            export IMAGE="$IMAGE_NAME:staging-$BUILD_NUMBER"
-            ssh -o StrictHostKeyChecking=no ubuntu@$STAGING_HOST "mkdir -p ~/app && echo IMAGE=$IMAGE > ~/app/.env"
-            scp -o StrictHostKeyChecking=no ${STAGING_COMPOSE} ubuntu@$STAGING_HOST:~/app/
-            ssh -o StrictHostKeyChecking=no ubuntu@$STAGING_HOST "cd ~/app && IMAGE=$IMAGE docker compose -f ${STAGING_COMPOSE} --env-file .env pull && IMAGE=$IMAGE docker compose -f ${STAGING_COMPOSE} --env-file .env up -d && curl -fsS http://localhost:5001/health"
+            echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
+            docker push s224734529/753-app:${GIT_COMMIT}
           '''
         }
       }
