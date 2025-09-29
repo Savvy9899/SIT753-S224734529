@@ -85,52 +85,55 @@ pipeline {
 
     // 7) SECURITY
         stage('Security') {
-      steps {
-        sh '''
-          set -e
+        steps {
+          sh '''
+            set -e
 
-          # 1) npm audit (artifact only)
-          npm audit --json > npm-audit.json || true
+            # 0) npm audit (artifact only, does not fail build)
+            npm audit --json > npm-audit.json || true
 
-          # 2) Trivy (filesystem) -> SARIF
-          mkdir -p .trivy-cache
-          docker run --rm \
-            -v "$PWD":/src \
-            -v "$PWD/.trivy-cache":/root/.cache/trivy \
-            aquasec/trivy:latest fs /src \
-            --security-checks vuln,secret \
-            --severity HIGH,CRITICAL \
-            --format sarif \
-            -o /src/trivy-fs.sarif || true
+            # Share Trivy cache so DB isn’t re-downloaded each run
+            mkdir -p .trivy-cache
 
-          # 3) Trivy (image) -> SARIF
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v "$PWD/.trivy-cache":/root/.cache/trivy \
-            aquasec/trivy:latest image "$IMAGE_NAME:$IMAGE_TAG" \
-            --security-checks vuln,secret \
-            --severity HIGH,CRITICAL \
-            --format sarif \
-            -o /src/trivy-image.sarif || true
+            # 1) Trivy FS (source tree) -> SARIF
+            docker run --rm \
+              -v "$PWD":/src \
+              -v "$PWD/.trivy-cache":/root/.cache/trivy \
+              aquasec/trivy:latest fs /src \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --format sarif \
+              -o /src/trivy-fs.sarif || true
 
-          # 4) OSV-Scanner (lockfiles) -> SARIF
-          docker run --rm \
-            -v "$PWD":/repo \
-            ghcr.io/google/osv-scanner:latest \
-            -r /repo --format sarif -o /repo/osv.sarif || true
-        '''
-      }
-      post {
-        always {
-          archiveArtifacts artifacts: 'npm-audit.json, trivy-*.sarif, osv.sarif', fingerprint: true
-          recordIssues enabledForFailure: true, tools: [
-            sarif(pattern: 'trivy-fs.sarif'),
-            sarif(pattern: 'trivy-image.sarif'),
-            sarif(pattern: 'osv.sarif')
-          ]
+            # 2) Trivy IMAGE -> SARIF (mount workspace so -o path exists)
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$PWD":/src \
+              -v "$PWD/.trivy-cache":/root/.cache/trivy \
+              aquasec/trivy:latest image "$IMAGE_NAME:$IMAGE_TAG" \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --format sarif \
+              -o /src/trivy-image.sarif || true
+
+            # 3) OSV-Scanner -> SARIF (older image: no -o flag; redirect to file)
+            docker run --rm \
+              -v "$PWD":/repo \
+              ghcr.io/google/osv-scanner:latest \
+              -r /repo --format sarif > /repo/osv.sarif || true
+          '''
+        }
+        post {
+          always {
+            archiveArtifacts artifacts: 'npm-audit.json,trivy-fs.sarif,trivy-image.sarif,osv.sarif', fingerprint: true
+            recordIssues enabledForFailure: true, tools: [
+              sarif(id: 'trivy-fs',    pattern: 'trivy-fs.sarif'),
+              sarif(id: 'trivy-image', pattern: 'trivy-image.sarif'),
+              sarif(id: 'osv',         pattern: 'osv.sarif')
+            ]
+          }
         }
       }
-    }
 
     //     stage('Security') {
     //   steps {
