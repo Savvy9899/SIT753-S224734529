@@ -6,7 +6,7 @@ pipeline {
   options { timestamps(); buildDiscarder(logRotator(numToKeepStr: '20')) }
   environment {
     REGISTRY     = 'docker.io'
-    IMAGE_NAME   = 's224734529/753-app'
+    IMAGE_NAME   = 'pamuditha99/753-app'
     IMAGE_TAG    = "${env.GIT_COMMIT}"
     STAGING_HOST = 'staging.example.com'
     PROD_HOST    = 'prod.example.com'
@@ -236,7 +236,7 @@ pipeline {
         )]) {
           sh '''
             echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
-            docker push s224734529/753-app:${GIT_COMMIT}
+            docker push pamuditha99/753-app:${GIT_COMMIT}
           '''
         }
       }
