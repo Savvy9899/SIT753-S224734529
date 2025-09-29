@@ -1,5 +1,8 @@
 pipeline {
   agent any
+  tools {
+    nodejs 'Node20' // Use the name you configured in Jenkins
+  }
   options { timestamps(); buildDiscarder(logRotator(numToKeepStr: '20')) }
   environment {
     REGISTRY     = 'docker.io'
