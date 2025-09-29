@@ -1,64 +1,32 @@
 pipeline {
   agent any
-  options { timestamps() }
-  tools { nodejs 'Node20' } 
+  options { timestamps(); buildDiscarder(logRotator(numToKeepStr: '20')) }
   environment {
-    REGISTRY       = 'docker.io'
-    IMAGE_NAME     = 'yourdockerhubuser/sit753-app'
-    IMAGE_TAG      = "${env.GIT_COMMIT}"
-    STAGING_HOST   = 'staging.example.com'
-    PROD_HOST      = 'prod.example.com'
-    STAGING_COMPOSE= 'docker-compose.staging.yml'
-    PROD_COMPOSE   = 'docker-compose.prod.yml'
-    PATH = "/usr/local/bin:/opt/homebrew/bin:${env.PATH}"
+    REGISTRY     = 'docker.io'
+    IMAGE_NAME   = 's224734529/753-app'
+    IMAGE_TAG    = "${env.GIT_COMMIT}"
+    STAGING_HOST = 'staging.example.com'
+    PROD_HOST    = 'prod.example.com'
+    STAGING_COMPOSE = 'docker-compose.staging.yml'
+    PROD_COMPOSE    = 'docker-compose.prod.yml'
   }
-
   stages {
 
-    stage('Checkout') {
-      steps { checkout scm }
-    }
+    stage('Checkout') { steps { checkout scm } }
 
-  //   stage('Shell Test') {
-  // steps {
-  //   sh 'which sh'
-  // }
-}
-
-    // stage('Build') {
-    //   steps {
-    //     sh '''
-    //       set -e
-    //       node -v || true
-    //       npm ci
-    //       npm run build || true
-    //       docker build -t $IMAGE_NAME:$IMAGE_TAG .
-    //     '''
-    //   }
-    // }
-    stage('Preflight') {
-      steps {
-        sh '''
-          set -e
-          pwd
-          ls -la
-          test -f Dockerfile || (echo "Missing Dockerfile at repo root"; exit 1)
-        '''
-      }
-    }
-
+    // 4) BUILD
     stage('Build') {
       steps {
         sh '''
           set -e
-          node -v
           npm ci
-          docker version
+          npm run build || true
           docker build -t $IMAGE_NAME:$IMAGE_TAG .
         '''
       }
     }
 
+    // 5) TEST
     stage('Test') {
       steps {
         sh '''
@@ -68,55 +36,43 @@ pipeline {
       }
       post {
         always {
-          junit 'junit.xml'                           // if using jest-junit, configure to write junit.xml
-          publishCoverage adapters: [coberturaAdapter('coverage/cobertura-coverage.xml')], sourceFileResolver: sourceFiles('STORE_LAST_BUILD')
+          junit 'junit.xml'
+          publishCoverage adapters: [coberturaAdapter('coverage/cobertura-coverage.xml')],
+                          sourceFileResolver: sourceFiles('STORE_LAST_BUILD')
         }
       }
     }
 
+    // 6) CODE QUALITY
     stage('Code Quality (SonarQube)') {
       steps {
         withSonarQubeEnv('sonarqube') {
           withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_LOGIN')]) {
-            sh '''
-              npm ci --silent || true
-              ./node_modules/.bin/sonar-scanner || sonar-scanner \
-                -Dsonar.login=$SONAR_LOGIN
-            '''
+            sh 'sonar-scanner -Dsonar.login=$SONAR_LOGIN'
           }
         }
       }
       post {
         success {
-          // fail the build if Sonar Quality Gate fails
           script {
             timeout(time: 10, unit: 'MINUTES') {
               def qg = waitForQualityGate()
-              if (qg.status != 'OK') {
-                error "Quality Gate failed: ${qg.status}"
-              }
+              if (qg.status != 'OK') error "Quality Gate failed: ${qg.status}"
             }
           }
         }
       }
     }
 
+    // 7) SECURITY
     stage('Security') {
       steps {
         sh '''
           set -e
-          # Dependency audit
-          npm audit --json || true > npm-audit.json
-
-          # OWASP Dependency-Check (CLI via Docker)
+          npm audit --json > npm-audit.json || true
           docker run --rm -v "$PWD":/src owasp/dependency-check:latest \
             --scan /src --format "HTML" --out /src --project your-app || true
-
-          # Trivy image scan
-          docker run --rm aquasec/trivy:latest image --exit-code 0 --severity HIGH,CRITICAL $IMAGE_NAME:$IMAGE_TAG > trivy.txt || true
-
-          # Fail if Trivy finds CRITICAL issues (adjust to policy)
-          docker run --rm aquasec/trivy:latest image --exit-code 1 --severity CRITICAL $IMAGE_NAME:$IMAGE_TAG || true
+          docker run --rm aquasec/trivy:latest image --severity HIGH,CRITICAL $IMAGE_NAME:$IMAGE_TAG > trivy.txt || true
         '''
       }
       post {
@@ -131,7 +87,8 @@ pipeline {
       }
     }
 
-    stage('Push Image (Staging)') {
+    // 8) DEPLOY (Staging)
+    stage('Push & Deploy to Staging') {
       steps {
         withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
           sh '''
@@ -141,25 +98,20 @@ pipeline {
             docker push $IMAGE_NAME:staging-$BUILD_NUMBER
           '''
         }
-      }
-    }
-
-    stage('Deploy to Staging') {
-      steps {
         sshagent(credentials: ['staging-ssh']) {
           sh '''
             export IMAGE="$IMAGE_NAME:staging-$BUILD_NUMBER"
             ssh -o StrictHostKeyChecking=no ubuntu@$STAGING_HOST "mkdir -p ~/app && echo IMAGE=$IMAGE > ~/app/.env"
             scp -o StrictHostKeyChecking=no ${STAGING_COMPOSE} ubuntu@$STAGING_HOST:~/app/
-            ssh -o StrictHostKeyChecking=no ubuntu@$STAGING_HOST "cd ~/app && IMAGE=$IMAGE docker compose -f ${STAGING_COMPOSE} --env-file .env pull && IMAGE=$IMAGE docker compose -f ${STAGING_COMPOSE} --env-file .env up -d"
-            ssh -o StrictHostKeyChecking=no ubuntu@$STAGING_HOST "curl -fsS http://localhost:5001/health || exit 1"
+            ssh -o StrictHostKeyChecking=no ubuntu@$STAGING_HOST "cd ~/app && IMAGE=$IMAGE docker compose -f ${STAGING_COMPOSE} --env-file .env pull && IMAGE=$IMAGE docker compose -f ${STAGING_COMPOSE} --env-file .env up -d && curl -fsS http://localhost:5001/health"
           '''
         }
       }
     }
 
+    // 9) RELEASE (Production)
     stage('Release to Production') {
-      when { beforeAgent true; branch 'main' }
+      when { branch 'main' }
       steps {
         input message: 'Promote to production?', ok: 'Deploy'
         withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
@@ -174,35 +126,24 @@ pipeline {
             export IMAGE="$IMAGE_NAME:prod-$BUILD_NUMBER"
             ssh -o StrictHostKeyChecking=no ubuntu@$PROD_HOST "mkdir -p ~/app && echo IMAGE=$IMAGE > ~/app/.env"
             scp -o StrictHostKeyChecking=no ${PROD_COMPOSE} ubuntu@$PROD_HOST:~/app/
-            ssh -o StrictHostKeyChecking=no ubuntu@$PROD_HOST "cd ~/app && IMAGE=$IMAGE docker compose -f ${PROD_COMPOSE} --env-file .env pull && IMAGE=$IMAGE docker compose -f ${PROD_COMPOSE} --env-file .env up -d"
-            ssh -o StrictHostKeyChecking=no ubuntu@$PROD_HOST "curl -fsS http://localhost/health || exit 1"
+            ssh -o StrictHostKeyChecking=no ubuntu@$PROD_HOST "cd ~/app && IMAGE=$IMAGE docker compose -f ${PROD_COMPOSE} --env-file .env pull && IMAGE=$IMAGE docker compose -f ${PROD_COMPOSE} --env-file .env up -d && curl -fsS http://localhost/health"
           '''
         }
       }
     }
 
+    // 10) MONITORING
     stage('Monitoring & Alerting') {
       steps {
         withCredentials([string(credentialsId: 'DD_API_KEY', variable: 'DD_API_KEY')]) {
           sh '''
-            # Post a deploy event to Datadog (replace tags as needed)
             curl -sS -X POST "https://api.datadoghq.com/api/v1/events" \
-              -H "DD-API-KEY: $DD_API_KEY" \
-              -H "Content-Type: application/json" \
-              -d '{
-                    "title": "Deploy '$JOB_NAME' #'$BUILD_NUMBER'",
-                    "text": "Image: '$IMAGE_NAME':'$IMAGE_TAG'",
-                    "tags": ["service:your-app","env:production","team:your-team"]
-                  }' >/dev/null || true
+              -H "DD-API-KEY: $DD_API_KEY" -H "Content-Type: application/json" \
+              -d '{"title":"Deploy '$JOB_NAME' #'$BUILD_NUMBER'","text":"Image: '$IMAGE_NAME':'$IMAGE_TAG'","tags":["service:your-app","env:prod"]}' || true
           '''
         }
       }
     }
   }
-
-  post {
-    always {
-      cleanWs()
-    }
-  }
+  post { always { cleanWs() } }
 }
