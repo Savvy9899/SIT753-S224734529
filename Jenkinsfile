@@ -271,14 +271,9 @@ pipeline {
     script {
       catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
         withCredentials([string(credentialsId: 'DD_API_KEY', variable: 'DD_API_KEY')]) {
-          sh '''
-            # Example: send something to Datadog
-            echo "Would send metrics with DD_API_KEY=${DD_API_KEY:0:4}****"
-          '''
+          sh 'echo "Send metrics with DD_API_KEY set"'
         }
       }
     }
   }
-}
-  post { always { cleanWs() } }
 }
