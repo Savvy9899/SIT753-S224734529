@@ -20,7 +20,7 @@ pipeline {
         sh '''
           set -e
           npm ci
-          // npm run build || true
+          npm run build || true
           docker build -t $IMAGE_NAME:$IMAGE_TAG .
         '''
       }
