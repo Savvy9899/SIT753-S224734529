@@ -50,7 +50,7 @@ pipeline {
     // 6) CODE QUALITY
     stage('Code Quality (SonarQube)') {
   steps {
-    script { def scannerHome = tool 'SonarScanner' }   // uses the Tool you added
+    script { scannerHome = tool 'SonarScanner' }   // uses the Tool you added
     withSonarQubeEnv('sonarqube') {                // matches your Server name
       sh """
         ${scannerHome}/bin/sonar-scanner \
