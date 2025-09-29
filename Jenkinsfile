@@ -86,25 +86,95 @@ pipeline {
     // 7) SECURITY
     stage('Security') {
       steps {
-        sh '''
-          set -e
-          npm audit --json > npm-audit.json || true
-          docker run --rm -v "$PWD":/src owasp/dependency-check:latest \
-            --scan /src --format "HTML" --out /src --project your-app || true
-          docker run --rm aquasec/trivy:latest image --severity HIGH,CRITICAL $IMAGE_NAME:$IMAGE_TAG > trivy.txt || true
-        '''
+        withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
+          sh '''
+            set -e
+
+            # 1) npm audit (quick)
+            npm audit --json --omit=dev > npm-audit.json || true
+
+            # 2) OWASP Dependency-Check (quick mode with cache + API key)
+            export ODC_CACHE="$HOME/.odc-data"
+            mkdir -p "$ODC_CACHE"
+
+            # Try fast scan without update; if cache empty, prime once then rescan
+            docker run --rm --platform linux/arm64/v8 \
+              -e NVD_API_KEY="$NVD_API_KEY" \
+              -v "$PWD":/src \
+              -v "$ODC_CACHE":/usr/share/dependency-check/data \
+              owasp/dependency-check:latest \
+              --scan /src/package-lock.json \
+              --format "XML,HTML" \
+              --out /src \
+              --project sit753-app \
+              --exclude "**/node_modules/**" --exclude "**/coverage/**" --exclude "**/.git/**" \
+              --noupdate || (
+                docker run --rm --platform linux/arm64/v8 \
+                  -e NVD_API_KEY="$NVD_API_KEY" \
+                  -v "$ODC_CACHE":/usr/share/dependency-check/data \
+                  owasp/dependency-check:latest \
+                  --updateonly && \
+                docker run --rm --platform linux/arm64/v8 \
+                  -e NVD_API_KEY="$NVD_API_KEY" \
+                  -v "$PWD":/src \
+                  -v "$ODC_CACHE":/usr/share/dependency-check/data \
+                  owasp/dependency-check:latest \
+                  --scan /src/package-lock.json \
+                  --format "XML,HTML" \
+                  --out /src \
+                  --project sit753-app \
+                  --exclude "**/node_modules/**" --exclude "**/coverage/**" --exclude "**/.git/**" \
+                  --noupdate
+              )
+
+            # 3) Trivy (cache DB; skip update on regular runs)
+            export TRIVY_CACHE="$HOME/.cache/trivy"
+            mkdir -p "$TRIVY_CACHE"
+            docker run --rm --platform linux/arm64/v8 \
+              -v "$TRIVY_CACHE":/root/.cache/ \
+              aquasec/trivy:latest image \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --no-progress \
+              --cache-dir /root/.cache/ \
+              --skip-db-update \
+              "$IMAGE_NAME:$IMAGE_TAG" > trivy.txt || true
+          '''
+        }
       }
       post {
         always {
-          archiveArtifacts artifacts: 'dependency-check-report.html, npm-audit.json, trivy.txt', fingerprint: true
+          archiveArtifacts artifacts: 'dependency-check-report.html, dependency-check-report.xml, npm-audit.json, trivy.txt', fingerprint: true
           recordIssues enabledForFailure: true, tools: [
             trivy(pattern: 'trivy.txt'),
             npmAudit(pattern: 'npm-audit.json'),
-            dependencyCheck(pattern: 'dependency-check-report.html')
+            dependencyCheck(pattern: 'dependency-check-report.xml')
           ]
         }
       }
     }
+
+    // stage('Security') {
+    //   steps {
+    //     sh '''
+    //       set -e
+    //       npm audit --json > npm-audit.json || true
+    //       docker run --rm -v "$PWD":/src owasp/dependency-check:latest \
+    //         --scan /src --format "HTML" --out /src --project your-app || true
+    //       docker run --rm aquasec/trivy:latest image --severity HIGH,CRITICAL $IMAGE_NAME:$IMAGE_TAG > trivy.txt || true
+    //     '''
+    //   }
+    //   post {
+    //     always {
+    //       archiveArtifacts artifacts: 'dependency-check-report.html, npm-audit.json, trivy.txt', fingerprint: true
+    //       recordIssues enabledForFailure: true, tools: [
+    //         trivy(pattern: 'trivy.txt'),
+    //         npmAudit(pattern: 'npm-audit.json'),
+    //         dependencyCheck(pattern: 'dependency-check-report.html')
+    //       ]
+    //     }
+    //   }
+    // }
 
     // 8) DEPLOY (Staging)
     stage('Push & Deploy to Staging') {
