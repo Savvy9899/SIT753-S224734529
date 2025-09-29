@@ -12,6 +12,7 @@ pipeline {
     PROD_HOST    = 'prod.example.com'
     STAGING_COMPOSE = 'docker-compose.staging.yml'
     PROD_COMPOSE    = 'docker-compose.prod.yml'
+    PATH = "/usr/local/bin:/opt/homebrew/bin:${env.PATH}"
   }
   stages {
 
