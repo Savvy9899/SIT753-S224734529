@@ -84,71 +84,50 @@ pipeline {
     // }
 
     // 7) SECURITY
-    stage('Security') {
+        stage('Security') {
       steps {
-        withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_API_KEY')]) {
-          sh '''
-            set -e
+        sh '''
+          set -e
 
-            # 1) npm audit (quick)
-            npm audit --json --omit=dev > npm-audit.json || true
+          # 1) npm audit (Node deps)
+          npm audit --json > npm-audit.json || true
 
-            # 2) OWASP Dependency-Check (quick mode with cache + API key)
-            export ODC_CACHE="$HOME/.odc-data"
-            mkdir -p "$ODC_CACHE"
+          # 2) Trivy (filesystem): HIGH+CRITICAL vulns + secrets, cache DB for speed
+          mkdir -p .trivy-cache
+          docker run --rm \
+            -v "$PWD":/src \
+            -v "$PWD/.trivy-cache":/root/.cache/trivy \
+            aquasec/trivy:latest fs /src \
+            --security-checks vuln,secret \
+            --severity HIGH,CRITICAL \
+            --format sarif \
+            -o /src/trivy-fs.sarif || true
 
-            # Try fast scan without update; if cache empty, prime once then rescan
-            docker run --rm --platform linux/arm64/v8 \
-              -e NVD_API_KEY="$NVD_API_KEY" \
-              -v "$PWD":/src \
-              -v "$ODC_CACHE":/usr/share/dependency-check/data \
-              owasp/dependency-check:latest \
-              --scan /src/package-lock.json \
-              --format "XML,HTML" \
-              --out /src \
-              --project sit753-app \
-              --exclude "**/node_modules/**" --exclude "**/coverage/**" --exclude "**/.git/**" \
-              --noupdate || (
-                docker run --rm --platform linux/arm64/v8 \
-                  -e NVD_API_KEY="$NVD_API_KEY" \
-                  -v "$ODC_CACHE":/usr/share/dependency-check/data \
-                  owasp/dependency-check:latest \
-                  --updateonly && \
-                docker run --rm --platform linux/arm64/v8 \
-                  -e NVD_API_KEY="$NVD_API_KEY" \
-                  -v "$PWD":/src \
-                  -v "$ODC_CACHE":/usr/share/dependency-check/data \
-                  owasp/dependency-check:latest \
-                  --scan /src/package-lock.json \
-                  --format "XML,HTML" \
-                  --out /src \
-                  --project sit753-app \
-                  --exclude "**/node_modules/**" --exclude "**/coverage/**" --exclude "**/.git/**" \
-                  --noupdate
-              )
+          # 3) Trivy (image)
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD/.trivy-cache":/root/.cache/trivy \
+            aquasec/trivy:latest image "$IMAGE_NAME:$IMAGE_TAG" \
+            --security-checks vuln,secret \
+            --severity HIGH,CRITICAL \
+            --format sarif \
+            -o /src/trivy-image.sarif || true
 
-            # 3) Trivy (cache DB; skip update on regular runs)
-            export TRIVY_CACHE="$HOME/.cache/trivy"
-            mkdir -p "$TRIVY_CACHE"
-            docker run --rm --platform linux/arm64/v8 \
-              -v "$TRIVY_CACHE":/root/.cache/ \
-              aquasec/trivy:latest image \
-              --scanners vuln \
-              --severity HIGH,CRITICAL \
-              --no-progress \
-              --cache-dir /root/.cache/ \
-              --skip-db-update \
-              "$IMAGE_NAME:$IMAGE_TAG" > trivy.txt || true
-          '''
-        }
+          # 4) OSV-Scanner (lockfiles/manifests)
+          docker run --rm \
+            -v "$PWD":/repo \
+            ghcr.io/google/osv-scanner:latest \
+            -r /repo --format json > osv.json || true
+        '''
       }
       post {
         always {
-          archiveArtifacts artifacts: 'dependency-check-report.html, dependency-check-report.xml, npm-audit.json, trivy.txt', fingerprint: true
+          archiveArtifacts artifacts: 'npm-audit.json, trivy-*.sarif, osv.json', fingerprint: true
+          // Use generic SARIF + npmAudit parsers (no "trivy" DSL needed)
           recordIssues enabledForFailure: true, tools: [
-            trivy(pattern: 'trivy.txt'),
             npmAudit(pattern: 'npm-audit.json'),
-            dependencyCheck(pattern: 'dependency-check-report.xml')
+            sarif(pattern: 'trivy-*.sarif')
+            // OSV doesn't have a native Warnings NG parser; keep as artifact or parse via a custom step if you want it in Checks.
           ]
         }
       }
