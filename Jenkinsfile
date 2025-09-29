@@ -48,11 +48,25 @@ pipeline {
     }
 
     // 6) CODE QUALITY
-    stage('Code Quality (SonarQube)') {
-      steps {
-        withSonarQubeEnv('sonarqube') {
-          withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_LOGIN')]) {
-            sh 'sonar-scanner -Dsonar.login=$SONAR_LOGIN'
+    // stage('Code Quality (SonarQube)') {
+    //   steps {
+    //     withSonarQubeEnv('sonarqube') {
+    //       withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_LOGIN')]) {
+    //         sh 'sonar-scanner -Dsonar.login=$SONAR_LOGIN'
+    //       }
+    //     }
+    //   }
+          stage('Code Quality (SonarQube)') {
+        steps {
+          script { scannerHome = tool 'SonarScanner' }   // uses the Tool you added
+          withSonarQubeEnv('sonarqube') {                // matches your Server name
+            sh """
+              ${scannerHome}/bin/sonar-scanner \
+                -Dsonar.projectKey=Savvy9899_SIT753-S224734529 \
+                -Dsonar.projectName=SIT753-App \
+                -Dsonar.sources=src \
+                -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+            """
           }
         }
       }
