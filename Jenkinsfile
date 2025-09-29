@@ -267,13 +267,16 @@ pipeline {
 
     // 10) MONITORING
     stage('Monitoring & Alerting') {
-  steps {
-    script {
-      catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+      steps {
         withCredentials([string(credentialsId: 'DD_API_KEY', variable: 'DD_API_KEY')]) {
-          sh 'echo "Send metrics with DD_API_KEY set"'
+          sh '''
+            curl -sS -X POST "https://api.datadoghq.com/api/v1/events" \
+              -H "DD-API-KEY: $DD_API_KEY" -H "Content-Type: application/json" \
+              -d '{"title":"Deploy '$JOB_NAME' #'$BUILD_NUMBER'","text":"Image: '$IMAGE_NAME':'$IMAGE_TAG'","tags":["service:your-app","env:prod"]}' || true
+          '''
         }
       }
     }
   }
+  post { always { cleanWs() } }
 }
