@@ -267,16 +267,18 @@ pipeline {
 
     // 10) MONITORING
     stage('Monitoring & Alerting') {
-      steps {
+  steps {
+    script {
+      catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
         withCredentials([string(credentialsId: 'DD_API_KEY', variable: 'DD_API_KEY')]) {
           sh '''
-            curl -sS -X POST "https://api.datadoghq.com/api/v1/events" \
-              -H "DD-API-KEY: $DD_API_KEY" -H "Content-Type: application/json" \
-              -d '{"title":"Deploy '$JOB_NAME' #'$BUILD_NUMBER'","text":"Image: '$IMAGE_NAME':'$IMAGE_TAG'","tags":["service:your-app","env:prod"]}' || true
+            # Example: send something to Datadog
+            echo "Would send metrics with DD_API_KEY=${DD_API_KEY:0:4}****"
           '''
         }
       }
     }
   }
+}
   post { always { cleanWs() } }
 }
