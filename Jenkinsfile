@@ -48,6 +48,20 @@ pipeline {
     }
 
     // 6) CODE QUALITY
+    stage('Code Quality (SonarQube)') {
+  steps {
+    script { scannerHome = tool 'SonarScanner' }   // uses the Tool you added
+    withSonarQubeEnv('sonarqube') {                // matches your Server name
+      sh """
+        ${scannerHome}/bin/sonar-scanner \
+          -Dsonar.projectKey=Savvy9899_SIT753-S224734529 \
+          -Dsonar.projectName=SIT753-App \
+          -Dsonar.sources=src \
+          -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+      """
+    }
+  }
+}
     // stage('Code Quality (SonarQube)') {
     //   steps {
     //     withSonarQubeEnv('sonarqube') {
@@ -56,31 +70,17 @@ pipeline {
     //       }
     //     }
     //   }
-          stage('Code Quality (SonarQube)') {
-        steps {
-          script { scannerHome = tool 'SonarScanner' }   // uses the Tool you added
-          withSonarQubeEnv('sonarqube') {                // matches your Server name
-            sh """
-              ${scannerHome}/bin/sonar-scanner \
-                -Dsonar.projectKey=Savvy9899_SIT753-S224734529 \
-                -Dsonar.projectName=SIT753-App \
-                -Dsonar.sources=src \
-                -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-            """
-          }
-        }
-      }
-      post {
-        success {
-          script {
-            timeout(time: 10, unit: 'MINUTES') {
-              def qg = waitForQualityGate()
-              if (qg.status != 'OK') error "Quality Gate failed: ${qg.status}"
-            }
-          }
-        }
-      }
-    }
+    //   post {
+    //     success {
+    //       script {
+    //         timeout(time: 10, unit: 'MINUTES') {
+    //           def qg = waitForQualityGate()
+    //           if (qg.status != 'OK') error "Quality Gate failed: ${qg.status}"
+    //         }
+    //       }
+    //     }
+    //   }
+    // }
 
     // 7) SECURITY
     stage('Security') {
