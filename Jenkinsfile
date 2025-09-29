@@ -24,7 +24,7 @@ pipeline {
         sh '''
           set -e
           npm ci
-          npm run build || true
+          // npm run build || true
           docker build -t $IMAGE_NAME:$IMAGE_TAG .
         '''
       }
@@ -50,7 +50,7 @@ pipeline {
     // 6) CODE QUALITY
     stage('Code Quality (SonarQube)') {
   steps {
-    script { scannerHome = tool 'SonarScanner' }   // uses the Tool you added
+    script { def scannerHome = tool 'SonarScanner' }   // uses the Tool you added
     withSonarQubeEnv('sonarqube') {                // matches your Server name
       sh """
         ${scannerHome}/bin/sonar-scanner \
