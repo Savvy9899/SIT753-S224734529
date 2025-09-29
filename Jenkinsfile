@@ -54,6 +54,7 @@ pipeline {
     withSonarQubeEnv('sonarqube') {                // matches your Server name
       sh """
         ${scannerHome}/bin/sonar-scanner \
+          -Dsonar.organization=s224734529 \
           -Dsonar.projectKey=Savvy9899_SIT753-S224734529 \
           -Dsonar.projectName=SIT753-App \
           -Dsonar.sources=src \
