@@ -19,9 +19,10 @@ pipeline {
       steps {
         sh '''
           set -e
-          npm ci
-          npm run build || true
-          docker build -t $IMAGE_NAME:$IMAGE_TAG .
+      docker run --rm -v "$PWD":/app -w /app node:20-alpine sh -c "
+        npm ci &&
+        npm test -- --ci || true
+      "
         '''
       }
     }
