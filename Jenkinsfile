@@ -89,10 +89,10 @@ pipeline {
         sh '''
           set -e
 
-          # 1) npm audit (Node deps)
+          # 1) npm audit (artifact only)
           npm audit --json > npm-audit.json || true
 
-          # 2) Trivy (filesystem): HIGH+CRITICAL vulns + secrets, cache DB for speed
+          # 2) Trivy (filesystem) -> SARIF
           mkdir -p .trivy-cache
           docker run --rm \
             -v "$PWD":/src \
@@ -103,7 +103,7 @@ pipeline {
             --format sarif \
             -o /src/trivy-fs.sarif || true
 
-          # 3) Trivy (image)
+          # 3) Trivy (image) -> SARIF
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$PWD/.trivy-cache":/root/.cache/trivy \
@@ -113,25 +113,73 @@ pipeline {
             --format sarif \
             -o /src/trivy-image.sarif || true
 
-          # 4) OSV-Scanner (lockfiles/manifests)
+          # 4) OSV-Scanner (lockfiles) -> SARIF
           docker run --rm \
             -v "$PWD":/repo \
             ghcr.io/google/osv-scanner:latest \
-            -r /repo --format json > osv.json || true
+            -r /repo --format sarif -o /repo/osv.sarif || true
         '''
       }
       post {
         always {
-          archiveArtifacts artifacts: 'npm-audit.json, trivy-*.sarif, osv.json', fingerprint: true
-          // Use generic SARIF + npmAudit parsers (no "trivy" DSL needed)
+          archiveArtifacts artifacts: 'npm-audit.json, trivy-*.sarif, osv.sarif', fingerprint: true
           recordIssues enabledForFailure: true, tools: [
-            npmAudit(pattern: 'npm-audit.json'),
-            sarif(pattern: 'trivy-*.sarif')
-            // OSV doesn't have a native Warnings NG parser; keep as artifact or parse via a custom step if you want it in Checks.
+            sarif(pattern: 'trivy-fs.sarif'),
+            sarif(pattern: 'trivy-image.sarif'),
+            sarif(pattern: 'osv.sarif')
           ]
         }
       }
     }
+
+    //     stage('Security') {
+    //   steps {
+    //     sh '''
+    //       set -e
+
+    //       # 1) npm audit (Node deps)
+    //       npm audit --json > npm-audit.json || true
+
+    //       # 2) Trivy (filesystem): HIGH+CRITICAL vulns + secrets, cache DB for speed
+    //       mkdir -p .trivy-cache
+    //       docker run --rm \
+    //         -v "$PWD":/src \
+    //         -v "$PWD/.trivy-cache":/root/.cache/trivy \
+    //         aquasec/trivy:latest fs /src \
+    //         --security-checks vuln,secret \
+    //         --severity HIGH,CRITICAL \
+    //         --format sarif \
+    //         -o /src/trivy-fs.sarif || true
+
+    //       # 3) Trivy (image)
+    //       docker run --rm \
+    //         -v /var/run/docker.sock:/var/run/docker.sock \
+    //         -v "$PWD/.trivy-cache":/root/.cache/trivy \
+    //         aquasec/trivy:latest image "$IMAGE_NAME:$IMAGE_TAG" \
+    //         --security-checks vuln,secret \
+    //         --severity HIGH,CRITICAL \
+    //         --format sarif \
+    //         -o /src/trivy-image.sarif || true
+
+    //       # 4) OSV-Scanner (lockfiles/manifests)
+    //       docker run --rm \
+    //         -v "$PWD":/repo \
+    //         ghcr.io/google/osv-scanner:latest \
+    //         -r /repo --format json > osv.json || true
+    //     '''
+    //   }
+    //   post {
+    //     always {
+    //       archiveArtifacts artifacts: 'npm-audit.json, trivy-*.sarif, osv.json', fingerprint: true
+    //       // Use generic SARIF + npmAudit parsers (no "trivy" DSL needed)
+    //       recordIssues enabledForFailure: true, tools: [
+    //         npmAudit(pattern: 'npm-audit.json'),
+    //         sarif(pattern: 'trivy-*.sarif')
+    //         // OSV doesn't have a native Warnings NG parser; keep as artifact or parse via a custom step if you want it in Checks.
+    //       ]
+    //     }
+    //   }
+    // }
 
     // stage('Security') {
     //   steps {
