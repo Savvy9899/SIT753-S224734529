@@ -19,10 +19,10 @@ pipeline {
       steps { checkout scm }
     }
 
-    stage('Shell Test') {
-  steps {
-    sh 'which sh'
-  }
+  //   stage('Shell Test') {
+  // steps {
+  //   sh 'which sh'
+  // }
 }
 
     stage('Build') {
